@@ -1,0 +1,27 @@
+# Build output and local configuration
+.build/
+.swiftpm/
+dist/
+.DS_Store
+*.xcuserstate
+__pycache__/
+.env
+.env.*
+!.env.example
+
+# Local assistant instructions, conversations, and research
+.claude/
+.codex/
+.agents/
+.cursor/
+.windsurf/
+.github/copilot-instructions.md
+.github/instructions/
+.github/prompts/
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+COPILOT.md
+.cursorrules
+.windsurfrules
+research/
