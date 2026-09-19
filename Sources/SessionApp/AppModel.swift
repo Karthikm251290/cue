@@ -36,6 +36,7 @@ import UserNotifications
     UserDefaults.standard.string(forKey: "lastPhysicalKey") ?? "No key press received yet"
   @Published var lastNavigationResult =
     UserDefaults.standard.string(forKey: "lastNavigationResult") ?? "No session switch checked yet"
+  private var backgroundClaudeIDs = Set<String>()
   private var polling = false
   private let readerQueue = DispatchQueue(label: "SessionControl.CodexReader", qos: .utility)
   init() {
@@ -61,6 +62,7 @@ import UserNotifications
         }
       }
     }
+    board.reconcile(now: Date())
     hooksInstalled = ClaudeSetup.installed()
     codexHooksInstalled = ClaudeSetup.installed(provider: .codex)
     deck.action = { [weak self] action in self?.route(action) }
@@ -111,6 +113,7 @@ import UserNotifications
     let elapsed = uptime - lastTick
     lastTick = uptime
     drain()
+    board.reconcile(now: now, backgroundClaudeIDs: backgroundClaudeIDs)
     // A long gap (sleep/lock) contributes no alert age and never replays missed sounds.
     let notified =
       board.visible.contains(where: { $0.alert?.active(at: now) == true })
@@ -185,7 +188,9 @@ import UserNotifications
       if event.source == "Hook" {
         UserDefaults.standard.set(event.date, forKey: "lastHook." + event.provider.rawValue)
       }
-      board.apply(event)
+      if event.provider != .claude || !backgroundClaudeIDs.contains(event.sessionID) {
+        board.apply(event)
+      }
       consumed.append(file)
     }
     if !consumed.isEmpty {
@@ -206,9 +211,17 @@ import UserNotifications
     readerQueue.async { [weak self] in
       let events = (reader.poll() + claudeReader.poll()).sorted { $0.0.date < $1.0.date }
       let health = reader.health
+      let backgroundIDs = claudeReader.backgroundSessionIDs
       Task { @MainActor in
         guard let self else { return }
-        for (event, historical) in events { self.board.apply(event, historical: historical) }
+        self.backgroundClaudeIDs = backgroundIDs
+        for (event, historical) in events {
+          guard event.provider != .claude || !backgroundIDs.contains(event.sessionID) else {
+            continue
+          }
+          self.board.apply(event, historical: historical)
+        }
+        self.board.reconcile(now: Date(), backgroundClaudeIDs: backgroundIDs)
         let lastHook = UserDefaults.standard.object(forKey: "lastHook.codex") as? Date
         let hookHealth =
           lastHook.map { "Last hook: \($0.formatted(date: .abbreviated, time: .shortened))" }

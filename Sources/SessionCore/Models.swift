@@ -279,7 +279,12 @@ public struct Board: Codable {
     s.updated = event.date
     s.source = event.source
     if let t = event.terminal { s.terminal = t.preservingSocket(from: s.terminal) }
-    if let t = event.turn { s.turn = t } else if event.kind == "prompt" { s.turn = event.id }
+    if let t = event.turn {
+      s.turn = t
+    } else if event.kind == "prompt" {
+      // Codex prompt hooks can precede the real turn ID; do not invent an incompatible one.
+      s.turn = event.provider == .claude ? event.id : nil
+    }
     if let title = event.title, !title.isEmpty { s.title = title }
     if let prompt = event.prompt, !prompt.isEmpty {
       if !s.prompts.contains(where: { $0.id == event.id }) {
@@ -324,6 +329,23 @@ public struct Board: Codable {
       for member in group {
         sessions[member.id]?.projectContext =
           URL(fileURLWithPath: member.path).deletingLastPathComponent().lastPathComponent
+      }
+    }
+  }
+  /// Missing completion events must not keep old tasks working indefinitely.
+  /// Registry-confirmed background Claude processes are not navigable interactive sessions.
+  public mutating func reconcile(now: Date, backgroundClaudeIDs: Set<String> = []) {
+    for session in visible {
+      let background =
+        session.provider == .claude && backgroundClaudeIDs.contains(session.providerID)
+      let stale = session.provider == .codex && now.timeIntervalSince(session.updated) > 86400
+      guard background || stale else { continue }
+      sessions[session.id]?.alert = nil
+      if stale && session.pinned {
+        sessions[session.id]?.state = .unknown
+        sessions[session.id]?.source = "No recent activity · status unavailable"
+      } else {
+        sessions[session.id]?.state = .ended
       }
     }
   }

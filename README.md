@@ -153,7 +153,7 @@ Data is stored in:
 ~/Library/Application Support/SessionControl/
 ```
 
-This includes a SQLite session snapshot, queued events, the reporter executable, and configuration backups. Prompt history is limited to 30 entries per session and 32,000 characters per entry. Closed or hidden unpinned sessions expire after seven days; inactive unpinned Codex sessions leave the board after a day.
+This includes a SQLite session snapshot, queued events, the reporter executable, and configuration backups. Prompt history is limited to 30 entries per session and 32,000 characters per entry. Closed or hidden unpinned sessions expire after seven days; Codex sessions without activity for a day leave the board even if a completion event was missed. Pinned stale Codex sessions stay visible with status unavailable. Background Claude processes are excluded from the interactive session board.
 
 The internal `SessionControl` name is retained for compatibility. Local prompts, credentials, provider settings, and session databases are not part of this repository.
 

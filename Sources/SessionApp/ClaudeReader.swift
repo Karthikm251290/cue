@@ -4,6 +4,7 @@ import SessionCore
 
 /// Reads only the public fields needed for identity; peer keys and messaging sockets are never opened.
 final class ClaudeReader: @unchecked Sendable {
+  private(set) var backgroundSessionIDs = Set<String>()
   private var stamps: [String: Date] = [:]
   private var attached = Set<String>()
   private var transcriptStamps: [String: Date] = [:]
@@ -16,6 +17,7 @@ final class ClaudeReader: @unchecked Sendable {
         at: root.appendingPathComponent("sessions"),
         includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
     var output: [(Event, Bool)] = []
+    var backgrounds = Set<String>()
     for file in files where file.pathExtension == "json" {
       guard let data = try? Data(contentsOf: file),
         let row = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
@@ -32,6 +34,11 @@ final class ClaudeReader: @unchecked Sendable {
       guard let expected = (row["procStart"] as? String).flatMap({ formatter.date(from: $0) }),
         abs(expected.timeIntervalSince1970 - started) < 2
       else { continue }
+      if row["kind"] as? String == "bg" {
+        backgrounds.insert(id)
+        identities.removeValue(forKey: id)
+        continue
+      }
       let tty = withUnsafePointer(to: &info.tty) {
         $0.withMemoryRebound(to: CChar.self, capacity: 128) { String(cString: $0) }
       }
@@ -130,6 +137,7 @@ final class ClaudeReader: @unchecked Sendable {
         }
       }
     }
+    backgroundSessionIDs = backgrounds
     return output.sorted { $0.0.date < $1.0.date }
   }
 }
